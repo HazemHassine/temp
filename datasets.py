@@ -3,14 +3,15 @@ from PIL import Image
 import numpy as np
 from torchvision.datasets import MNIST, CIFAR10
 from torchvision.datasets import DatasetFolder
-import medmnist
-from medmnist import INFO
+
 from PIL import Image
-import torch
+
 import os
 import os.path
 import sys
 import logging
+import medmnist
+from medmnist import INFO
 
 logging.basicConfig()
 logger = logging.getLogger()
@@ -42,7 +43,7 @@ def default_loader(path):
     else:
         return pil_loader(path)
 
-'''class MNIST_truncated(data.Dataset):
+class MNIST_truncated(data.Dataset):
 
     def __init__(self, root, dataidxs=None, train=True, transform=None, target_transform=None, download=False):
 
@@ -95,64 +96,9 @@ def default_loader(path):
         return img, target
 
     def __len__(self):
-        return len(self.data) '''
-
-'''
-Here we create a dataset as simmilar as possible to MNIST Dataset using medmnist organamnist
-'''
-# class ORGANMNIST_truncated(data.Dataset):
-
-class MNIST_truncated(data.Dataset):
-    def __init__(self, root, dataidxs=None, train=True, transform=None, target_transform=None, download=False):
-        self.root = root
-        self.dataidxs = dataidxs
-        self.train = train
-        self.transform = transform
-        self.target_transform = target_transform
-        self.download = download
-        self.data, self.target = self.__build_truncated_dataset__()
-
-    def __build_truncated_dataset__(self):
-        
-        DataClass = getattr(medmnist, INFO["organamnist"]["python_class"])
-        organamnist_dataobj = DataClass(root=self.root, split="train" if self.train else "test", transform=self.transform, target_transform=self.target_transform, download=self.download)
-
-        if self.train:
-            data = organamnist_dataobj.imgs
-            target = organamnist_dataobj.labels
-        else:
-            data = organamnist_dataobj.imgs
-            target = organamnist_dataobj.labels
-
-        if self.dataidxs is not None:
-            data = data[self.dataidxs]
-            target = target[self.dataidxs]
-        return torch.tensor(data), torch.tensor(target, dtype=torch.uint8).squeeze()
-
-    def __getitem__(self, index):
-        """
-        Args:
-            index (int): Index
-
-        Returns:
-            tuple: (image, target) where target is index of the target class.
-        """
-        img, target = self.data[index], self.target[index]
-
-        # doing this so that it is consistent with all other datasets
-        # to return a PIL Image
-        img = Image.fromarray(img.numpy(), mode='L')
-
-        if self.transform is not None:
-            img = self.transform(img)
-
-        if self.target_transform is not None:
-            target = self.target_transform(target)
-        target = target.squeeze()
-        return img, target
-
-    def __len__(self):
         return len(self.data)
+
+'''
 class CIFAR10_truncated(data.Dataset):
 
     def __init__(self, root, dataidxs=None, train=True, transform=None, target_transform=None, download=False):
@@ -211,7 +157,66 @@ class CIFAR10_truncated(data.Dataset):
 
     def __len__(self):
         return len(self.data)
+'''
+class CIFAR10_truncated(data.Dataset):
 
+    def __init__(self, root, dataidxs=None, train=True, transform=None, target_transform=None, download=False):
+
+        self.root = root
+        self.dataidxs = dataidxs
+        self.train = train
+        self.transform = transform
+        self.target_transform = target_transform
+        self.download = download
+
+        self.data, self.target = self.__build_truncated_dataset__()
+
+    def __build_truncated_dataset__(self):
+        #print("train member of the class: {}".format(self.train))
+        #data = cifar_dataobj.train_data
+        DataClass = getattr(medmnist, INFO["bloodmnist"]["python_class"])
+        bloodmnist_dataobj = DataClass(root=self.root,
+                                        split="train" if self.train else "test",
+                                        transform=self.transform,
+                                        target_transform=self.target_transform,
+                                        download=self.download,
+                                        as_rgb=True
+                                       )
+            
+        data = bloodmnist_dataobj.imgs
+        target = np.array(bloodmnist_dataobj.labels)
+        
+        if self.dataidxs is not None:
+            data = data[self.dataidxs]
+            target = target[self.dataidxs]
+
+        return data, target
+
+    def truncate_channel(self, index):
+        for i in range(index.shape[0]):
+            gs_index = index[i]
+            self.data[gs_index, :, :, 1] = 0.0
+            self.data[gs_index, :, :, 2] = 0.0
+
+    def __getitem__(self, index):
+        """
+        Args:
+            index (int): Index
+
+        Returns:
+            tuple: (image, target) where target is index of the target class.
+        """
+        img, target = self.data[index], self.target[index]
+
+        if self.transform is not None:
+            img = self.transform(img)
+
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+
+        return img, np.int64(target.item())
+    def __len__(self):
+        return len(self.data)
 
 
 class CIFAR10ColorGrayScale(data.Dataset):

@@ -52,16 +52,14 @@ def parse_class_dist(net_class_config):
     return cls_net_map
 
 def record_net_data_stats(y_train, net_dataidx_map, logdir):
-    temp = np.array(y_train)
-    logging.info("y_train shape %s"%str(temp.shape))
+
     net_cls_counts = {}
 
     for net_i, dataidx in net_dataidx_map.items():
         unq, unq_cnt = np.unique(y_train[dataidx], return_counts=True)
         tmp = {unq[i]: unq_cnt[i] for i in range(len(unq))}
         net_cls_counts[net_i] = tmp
-    # logging.debug('Data statistics: %s' % str(net_cls_counts))
-    logging.info('Data statistics: %s' % str(net_cls_counts))
+    logging.debug('Data statistics: %s' % str(net_cls_counts))
     return net_cls_counts
 
 def partition_data(dataset, datadir, logdir, partition, n_nets, alpha, args):
@@ -96,12 +94,11 @@ def partition_data(dataset, datadir, logdir, partition, n_nets, alpha, args):
 
     elif partition == "hetero-dir":
         min_size = 0
-        # K = 10
-        K = 11
+        K = 8
         N = y_train.shape[0]
         net_dataidx_map = {}
-        # while min_size < 10:
-        while min_size < 11:
+
+        while min_size < 8:
             idx_batch = [[] for _ in range(n_nets)]
             # for each class in the dataset
             for k in range(K):
@@ -136,16 +133,14 @@ def partition_data(dataset, datadir, logdir, partition, n_nets, alpha, args):
         # stage 2nd: hetero partition
         n_batches = (args.partition_step + 1) * sub_partition_size
         min_size = 0
-        # K = 10
-        K = 11
+        K = 10
 
         #N = len(step_batch_idxs[args.step])
         baseline_indices = np.concatenate([step_batch_idxs[i] for i in range(args.partition_step + 1)])
         y_train = y_train[baseline_indices]
         N = y_train.shape[0]
 
-        # while min_size < 10:
-        while min_size < 11:
+        while min_size < 10:
             idx_batch = [[] for _ in range(n_batches)]
             # for each class in the dataset
             for k in range(K):
@@ -213,7 +208,6 @@ def partition_data_dist_skew(dataset, datadir, logdir, partition, n_nets, alpha,
         # i.e. we firstly do an extreme version where we randomly sample 5 out of 10 groups s.t. in those groups there are only grayscale images
         #      for the other five groups, we leave all images to be colored images
         #########################################################################################################################################
-        grayscale_dominate_classes = np.random.choice(np.arange(10), 5, replace=False)
         grayscale_dominate_classes = np.random.choice(np.arange(10), 5, replace=False)
         logger.info("Grayscale image dominated classes are : {}".format(grayscale_dominate_classes))
 
@@ -851,6 +845,7 @@ def compute_accuracy(model, dataloader, get_confusion_matrix=False, device="cpu"
     correct, total = 0, 0
     with torch.no_grad():
         for batch_idx, (x, target) in enumerate(dataloader):
+            print("batch_idx", batch_idx)
             x, target = x.to(device), target.to(device)
             out = model(x)
             _, pred_label = torch.max(out.data, 1)
@@ -1020,7 +1015,7 @@ def get_dataloader(dataset, datadir, train_bs, test_bs, dataidxs=None):
 
         train_ds = dl_obj(datadir, dataidxs=dataidxs, train=True, transform=transform_train, download=True)
         test_ds = dl_obj(datadir, train=False, transform=transform_test, download=True)
-
+        print("test ds length", len(test_ds))
         train_dl = data.DataLoader(dataset=train_ds, batch_size=train_bs, shuffle=True)
         test_dl = data.DataLoader(dataset=test_ds, batch_size=test_bs, shuffle=False)
 

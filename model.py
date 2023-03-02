@@ -199,14 +199,13 @@ class SimpleCNNContainer(nn.Module):
 
 
 ############## LeNet for MNIST ###################
-ds = "organmnist"
 class LeNet(nn.Module):
     def __init__(self):
         super(LeNet, self).__init__()
         self.conv1 = nn.Conv2d(1, 20, 5, 1)
         self.conv2 = nn.Conv2d(20, 50, 5, 1)
         self.fc1 = nn.Linear(4*4*50, 500)
-        self.fc2 = nn.Linear(500, 11 if ds == "organmnist" else 10)
+        self.fc2 = nn.Linear(500, 10)
         self.ceriation = nn.CrossEntropyLoss()
     def forward(self, x):
         x = self.conv1(x)
@@ -222,7 +221,7 @@ class LeNet(nn.Module):
 
 
 class LeNetContainer(nn.Module):
-    def __init__(self, num_filters, kernel_size, input_dim, hidden_dims, output_dim=11):
+    def __init__(self, num_filters, kernel_size, input_dim, hidden_dims, output_dim=10):
         super(LeNetContainer, self).__init__()
         self.conv1 = nn.Conv2d(1, num_filters[0], kernel_size, 1)
         self.conv2 = nn.Conv2d(num_filters[0], num_filters[1], kernel_size, 1)
@@ -325,7 +324,8 @@ class ModerateCNN(nn.Module):
             nn.Linear(512, 512),
             nn.ReLU(inplace=True),
             nn.Dropout(p=0.1),
-            nn.Linear(512, 10)
+            # nn.Linear(512, 10)
+            nn.Linear(512, 8)
         )
 
     def forward(self, x):

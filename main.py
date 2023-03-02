@@ -18,8 +18,8 @@ args_logdir = "logs/cifar10"
 #args_dataset = "cifar10"
 args_datadir = "./data/cifar10"
 args_init_seed = 0
-# Originally this args_net_config = [3072, 100, 10]
-args_net_config = [3072, 100, 11]
+args_net_config = [3072, 100, 8]
+# args_net_config = [3072, 100, 10]
 #args_partition = "hetero-dir"
 args_partition = "homo"
 args_experiment = ["u-ensemble", "pdm"]
@@ -89,7 +89,14 @@ def trans_next_conv_layer_forward(layer_weight, next_layer_shape):
 
 def trans_next_conv_layer_backward(layer_weight, next_layer_shape):
     reconstructed_next_layer_shape = (next_layer_shape[1], next_layer_shape[0], next_layer_shape[2], next_layer_shape[3])
-    reshaped = layer_weight.reshape(reconstructed_next_layer_shape).transpose(1, 0, 2, 3).reshape(next_layer_shape[0], -1)
+    try:
+        reshaped = layer_weight.reshape(reconstructed_next_layer_shape).transpose(1, 0, 2, 3).reshape(next_layer_shape[0], -1)
+    except ValueError:
+        logger.info(f"next_layer_shape[1]={next_layer_shape[1]}, next_layer_shape[0]={next_layer_shape[0]}, next_layer_shape[2]={next_layer_shape[2]}, next_layer_shape[3]={next_layer_shape[3]}")
+        logger.info(f"next_layer_shape[0] , -1 ={next_layer_shape[0]}")
+        logger.info(f"layer_weight shape: {layer_weight.shape}")
+        logger.info(f"reconstructed_next_layer_shape  ={reconstructed_next_layer_shape}")
+        exit()
     return reshaped
 
 def train_net(net_id, net, train_dataloader, test_dataloader, epochs, lr, args, device="cpu"):
@@ -98,6 +105,7 @@ def train_net(net_id, net, train_dataloader, test_dataloader, epochs, lr, args, 
     logger.info('n_test: %d' % len(test_dataloader))
 
     train_acc = compute_accuracy(net, train_dataloader, device=device)
+    print("traingin accuracy calc")
     test_acc, conf_matrix = compute_accuracy(net, test_dataloader, get_confusion_matrix=True, device=device)
 
     logger.info('>> Pre-Training Training accuracy: {}'.format(train_acc))
@@ -154,6 +162,7 @@ def local_train(nets, args, net_dataidx_map, device="cpu"):
     local_datasets = []
     for net_id, net in nets.items():
         if args.retrain:
+            print(net_id)
             dataidxs = net_dataidx_map[net_id]
             logger.info("Training network %s. n_training: %d" % (str(net_id), len(dataidxs)))
             # move the model to cuda device:
@@ -212,7 +221,7 @@ def local_retrain_dummy(local_datasets, weights, args, mode="bottom-up", freezin
                                         kernel_size=5, 
                                         input_dim=input_dim, 
                                         hidden_dims=hidden_dims, 
-                                        output_dim=11)
+                                        output_dim=10)
     elif args.model == "moderate-cnn":
         #[(35, 27), (35,), (68, 315), (68,), (132, 612), (132,), (132, 1188), (132,), 
         #(260, 1188), (260,), (260, 2340), (260,), 
@@ -289,7 +298,7 @@ def local_retrain_dummy(local_datasets, weights, args, mode="bottom-up", freezin
                                                 kernel_size=3, 
                                                 input_dim=input_dim, 
                                                 hidden_dims=hidden_dims, 
-                                                output_dim=11)
+                                                output_dim=10)
     
     new_state_dict = {}
     model_counter = 0
@@ -448,6 +457,7 @@ def local_retrain(local_datasets, weights, args, mode="bottom-up", freezing_inde
         #[(35, 27), (35,), (68, 315), (68,), (132, 612), (132,), (132, 1188), (132,), 
         #(260, 1188), (260,), (260, 2340), (260,), 
         #(4160, 1025), (1025,), (1025, 515), (515,), (515, 10), (10,)]
+        print("mode", mode)
         if mode not in ("block-wise", "squeezing"):
             num_filters = [weights[0].shape[0], weights[2].shape[0], weights[4].shape[0], weights[6].shape[0], weights[8].shape[0], weights[10].shape[0]]
             input_dim = weights[12].shape[0]
@@ -1237,7 +1247,6 @@ def BBP_MAP(nets_list, model_meta_data, layer_type, net_dataidx_map,
     models = nets_list
     cls_freqs = traindata_cls_counts
     n_classes = args_net_config[-1]
-    logging.info("number of classes in BBP_MAP %s"%str(n_classes))
     it=5
     sigma=args_pdm_sig 
     sigma0=args_pdm_sig0
@@ -1483,7 +1492,7 @@ def fedma_comm(batch_weights, model_meta_data, layer_type, net_dataidx_map,
 
     cls_freqs = traindata_cls_counts
     # n_classes = 10
-    n_classes = 11
+    n_classes = 8
     batch_freqs = pdm_prepare_freq(cls_freqs, n_classes)
     it=5
 
@@ -1536,15 +1545,13 @@ if __name__ == "__main__":
     else:
         y_train, net_dataidx_map, traindata_cls_counts, baseline_indices = partition_data(args.dataset, args_datadir, args_logdir, 
                                                     args.partition, args.n_nets, args_alpha, args=args)
-
+    print(net_dataidx_map)
     n_classes = len(np.unique(y_train))
-    print("n_classes", n_classes)
     averaging_weights = np.zeros((args.n_nets, n_classes), dtype=np.float32)
-    print(args.n_nets)
+
     for i in range(n_classes):
         total_num_counts = 0
-        # Orginally: worker_class_counts = [0] * args.n_nets
-        worker_class_counts = np.zeros(args.n_nets, dtype=np.float32)
+        worker_class_counts = [0] * args.n_nets
         for j in range(args.n_nets):
             if i in traindata_cls_counts[j].keys():
                 total_num_counts += traindata_cls_counts[j][i]
@@ -1552,7 +1559,6 @@ if __name__ == "__main__":
             else:
                 total_num_counts += 0
                 worker_class_counts[j] = 0
-        print("total_num_counts",total_num_counts)
         averaging_weights[:, i] = worker_class_counts / total_num_counts
 
     logger.info("averaging_weights: {}".format(averaging_weights))
